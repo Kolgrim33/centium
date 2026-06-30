@@ -2,30 +2,72 @@ import argparse
 import sys
 
 from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
+from rich.text import Text
 from rich.prompt import Confirm
+from rich.rule import Rule
 
 from centium import pacman_wrapper as pw
 from centium import update_report as ur
 
-console = Console()
+console = Console(highlight=False)
 
+
+# ── Output primitives ────────────────────────────────────────────────────────
+
+def _header(text: str) -> None:
+    console.print(f"\n[bold]{text}[/bold]")
+    console.print(Rule(style="dim"))
+
+
+def _field(label: str, value: str, value_style: str = "") -> None:
+    label_text = f"  [dim]{label:<18}[/dim]"
+    value_text = f"[{value_style}]{value}[/{value_style}]" if value_style else value
+    console.print(f"{label_text}{value_text}")
+
+
+def _warn(message: str) -> None:
+    console.print(f"\n[yellow]⚠  {message}[/yellow]")
+
+
+def _error(message: str) -> None:
+    console.print(f"\n[red]✗  {message}[/red]")
+
+
+def _ok(message: str) -> None:
+    console.print(f"\n[green]✓  {message}[/green]")
+
+
+def _cancelled() -> None:
+    console.print("[dim]Cancelled.[/dim]")
+
+
+# ── Transaction preview ───────────────────────────────────────────────────────
+
+def _print_package_preview(info: dict) -> None:
+    _header(f"Package: {info['name']}")
+    _field("Description", info["description"])
+    _field("Repository", info["repo"])
+    _field("Version", info["version"])
+    _field("Download size", info["download_size"])
+    _field("Installed size", info["install_size"])
+    deps = info["depends_on"] if info["depends_on"] and info["depends_on"] != "None" else "—"
+    _field("Depends on", deps)
+    console.print()
+
+
+# ── Commands ─────────────────────────────────────────────────────────────────
 
 def cmd_search(term: str) -> int:
     try:
         results = pw.search(term)
     except pw.PacmanError as e:
-        console.print(f"[red]Error:[/red] {e}")
+        _error(str(e))
         return 1
 
     if not results:
-        console.print(f"[yellow]No packages found matching '{term}'.[/yellow]")
+        console.print(f"No packages found matching [bold]{term}[/bold].")
         return 0
 
-    # Exact/close name matches first, so the thing you're actually
-    # looking for doesn't get buried under language packs and unrelated
-    # partial matches.
     def relevance(pkg):
         name = pkg["name"].lower()
         t = term.lower()
@@ -36,17 +78,26 @@ def cmd_search(term: str) -> int:
         return 2
 
     results = sorted(results, key=relevance)
-
     shown = results[:15]
-    console.print(f"[bold]Search results for '{term}'[/bold] ({len(results)} total, showing top {len(shown)})\n")
+
+    _header(f"Search: {term}  ({len(results)} results, showing {len(shown)})")
 
     for pkg in shown:
-        installed = " [green]✓ installed[/green]" if pkg["installed"] else ""
-        console.print(f"[bold cyan]{pkg['name']}[/bold cyan] [dim]{pkg['repo']}/{pkg['version']}[/dim]{installed}")
-        console.print(f"  {pkg['description']}\n")
+        installed_tag = " [green]installed[/green]" if pkg["installed"] else ""
+        console.print(
+            f"  [bold cyan]{pkg['name']}[/bold cyan]"
+            f"  [dim]{pkg['repo']} / {pkg['version']}[/dim]"
+            f"{installed_tag}"
+        )
+        if pkg["description"]:
+            console.print(f"  [dim]{pkg['description']}[/dim]")
+        console.print()
 
     if len(results) > 15:
-        console.print(f"[dim]...and {len(results) - 15} more (mostly language packs/extras). Use a more specific search term to narrow this down.[/dim]")
+        console.print(
+            f"  [dim]… and {len(results) - 15} more."
+            f" Use a more specific term to narrow results.[/dim]\n"
+        )
     return 0
 
 
@@ -54,81 +105,91 @@ def cmd_install(pkg: str) -> int:
     try:
         info = pw.package_info(pkg)
     except pw.PacmanError as e:
-        console.print(f"[red]Error:[/red] {e}")
+        _error(str(e))
         return 1
 
     if info is None:
-        console.print(f"[red]Package '{pkg}' not found.[/red] Try `centium search {pkg}` to find the right name.")
+        _error(f"Package '{pkg}' not found.")
+        console.print(f"  Try: [bold]centium search {pkg}[/bold]\n")
         return 1
 
-    body = (
-        f"[bold]{info['name']}[/bold] ({info['repo']})\n"
-        f"{info['description']}\n\n"
-        f"Version: {info['version']}\n"
-        f"Download size: {info['download_size']}\n"
-        f"Installed size: {info['install_size']}\n"
-        f"Depends on: {info['depends_on']}"
-    )
-    console.print(Panel(body, title="About to install", border_style="cyan"))
+    _print_package_preview(info)
 
-    if not Confirm.ask("Proceed?"):
-        console.print("[yellow]Cancelled.[/yellow]")
+    if not Confirm.ask("Install with pacman?", default=False):
+        _cancelled()
         return 0
 
-    console.print("[dim]Handing off to pacman...[/dim]\n")
+    console.print("[dim]→ pacman -S ...[/dim]\n")
     return pw.run_install(pkg)
 
 
 def cmd_remove(pkg: str) -> int:
     dependents = pw.would_break_dependents(pkg)
-    if dependents:
-        console.print(f"[yellow]Warning:[/yellow] {len(dependents)} installed package(s) depend on '{pkg}':")
-        for d in dependents[:10]:
-            console.print(f"  - {d}")
-        if not Confirm.ask("Removing it may break these. Continue anyway?"):
-            console.print("[yellow]Cancelled.[/yellow]")
-            return 0
-    else:
-        if not Confirm.ask(f"Remove '{pkg}'?"):
-            console.print("[yellow]Cancelled.[/yellow]")
-            return 0
 
-    console.print("[dim]Handing off to pacman...[/dim]\n")
+    if dependents:
+        _warn(f"Removing '{pkg}' may affect {len(dependents)} installed package(s) that depend on it:")
+        for d in dependents[:10]:
+            console.print(f"  [dim]•[/dim] {d}")
+        if len(dependents) > 10:
+            console.print(f"  [dim]… and {len(dependents) - 10} more.[/dim]")
+        console.print(
+            "\n  [dim]pacman will show you the full impact before anything is removed.[/dim]\n"
+        )
+    else:
+        console.print(f"\nRemoving [bold]{pkg}[/bold] — no installed packages depend on it.\n")
+
+    if not Confirm.ask("Continue with pacman?", default=False):
+        _cancelled()
+        return 0
+
+    console.print("[dim]→ pacman -R ...[/dim]\n")
     return pw.run_remove(pkg)
 
 
 def cmd_update() -> int:
-    console.print("[cyan]Checking for updates...[/cyan]\n")
+    console.print("\n[dim]Checking for available updates...[/dim]")
     updates = pw.update_preview()
 
     if not updates:
-        console.print("[green]System is up to date (or `checkupdates` is unavailable — pacman-contrib not installed).[/green]")
-        if not Confirm.ask("Run `pacman -Syu` anyway?"):
+        _ok("System is up to date.")
+        console.print(
+            "  [dim](If you expected updates, ensure pacman-contrib is installed"
+            " so centium can use checkupdates.)[/dim]\n"
+        )
+        if not Confirm.ask("Run pacman -Syu anyway?", default=False):
+            _cancelled()
             return 0
         before = ur.snapshot()
         rc = pw.run_update()
         _print_post_update_summary(before, [])
         return rc
 
-    table = Table(title=f"{len(updates)} update(s) available")
-    table.add_column("Package")
-    table.add_column("Current")
-    table.add_column("New")
+    _header(f"{len(updates)} update(s) available")
+
     for u in updates:
-        table.add_row(u["name"], u["old_version"], u["new_version"])
-    console.print(table)
+        old = Text(u["old_version"], style="red")
+        new = Text(u["new_version"], style="green")
+        line = Text()
+        line.append(f"  {u['name']:<30}", style="bold")
+        line.append_text(old)
+        line.append(" → ")
+        line.append_text(new)
+        console.print(line)
 
-    if ur.kernel_was_updated([u["name"] for u in updates]):
-        console.print("[yellow]Note:[/yellow] This update includes a new kernel — a reboot will be needed for it to take effect.\n")
+    console.print()
 
-    if not Confirm.ask("Proceed with update?"):
-        console.print("[yellow]Cancelled.[/yellow]")
+    updated_names = [u["name"] for u in updates]
+    if ur.kernel_was_updated(updated_names):
+        _warn("This update includes a kernel package. A reboot will be required afterwards.")
+
+    if not Confirm.ask("\nProceed with pacman -Syu?", default=False):
+        _cancelled()
         return 0
 
     before = ur.snapshot()
-    console.print("[dim]Handing off to pacman...[/dim]\n")
+    console.print("\n[dim]→ pacman -Syu ...[/dim]\n")
     rc = pw.run_update()
-    _print_post_update_summary(before, [u["name"] for u in updates])
+    _print_post_update_summary(before, updated_names)
     return rc
 
 
@@ -136,44 +197,64 @@ def _print_post_update_summary(before: dict, updated_packages: list[str]) -> Non
     after = ur.snapshot()
     diff = ur.diff_snapshots(before, after)
 
-    console.print("\n[bold]Update summary[/bold]")
+    _header("Update summary")
     console.print(f"  Packages updated: {len(updated_packages)}")
 
     if diff["new_pacnew_files"]:
-        console.print(f"\n[yellow]⚠ {len(diff['new_pacnew_files'])} new .pacnew/.pacsave file(s) appeared:[/yellow]")
+        _warn(f"{len(diff['new_pacnew_files'])} new config file(s) need review:")
         for f in diff["new_pacnew_files"]:
-            console.print(f"    {f}")
-        console.print("  [dim]These are new upstream config defaults that weren't auto-merged with your edits. Review and merge manually, e.g. with: pacdiff[/dim]")
+            console.print(f"  [dim]•[/dim] {f}")
+        console.print(
+            "\n  [dim].pacnew files are upstream config defaults that couldn't be"
+            " merged with your edits. Review with:[/dim] [bold]pacdiff[/bold]\n"
+        )
 
     if diff["new_failed_services"]:
-        console.print(f"\n[red]✗ {len(diff['new_failed_services'])} service(s) failed after the update:[/red]")
+        _error(f"{len(diff['new_failed_services'])} service(s) newly failing after update:")
         for s in diff["new_failed_services"]:
-            console.print(f"    {s}")
-        console.print("  [dim]Check with: systemctl status <service>[/dim]")
+            console.print(f"  [dim]•[/dim] {s}")
+        console.print("  [dim]Inspect with:[/dim] [bold]systemctl status <service>[/bold]\n")
 
     if diff["resolved_failed_services"]:
-        console.print(f"\n[green]✓ {len(diff['resolved_failed_services'])} previously-failed service(s) now OK:[/green]")
+        _ok(f"{len(diff['resolved_failed_services'])} previously-failing service(s) now healthy:")
         for s in diff["resolved_failed_services"]:
-            console.print(f"    {s}")
+            console.print(f"  [dim]•[/dim] {s}")
+        console.print()
 
     if not diff["new_pacnew_files"] and not diff["new_failed_services"]:
-        console.print("\n[green]No new config conflicts or service failures detected.[/green]")
+        _ok("No config conflicts or service failures detected.")
+        console.print()
 
+
+# ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="centium", description="A friendlier UX wrapper around pacman.")
+    parser = argparse.ArgumentParser(
+        prog="centium",
+        description="A clear, minimal UX layer over pacman.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  centium search firefox\n"
+            "  centium install firefox\n"
+            "  centium remove firefox\n"
+            "  centium update\n\n"
+            "Centium never installs or removes packages itself.\n"
+            "It previews what will happen, then hands off to pacman."
+        ),
+    )
     sub = parser.add_subparsers(dest="command")
 
-    search_parser = sub.add_parser("search", help="Search for a package")
-    search_parser.add_argument("term")
+    s = sub.add_parser("search", help="Search for packages")
+    s.add_argument("term")
 
-    install_parser = sub.add_parser("install", help="Install a package with a preview")
-    install_parser.add_argument("package")
+    i = sub.add_parser("install", help="Preview and install a package")
+    i.add_argument("package")
 
-    remove_parser = sub.add_parser("remove", help="Remove a package with dependent warnings")
-    remove_parser.add_argument("package")
+    r = sub.add_parser("remove", help="Preview and remove a package")
+    r.add_argument("package")
 
-    sub.add_parser("update", help="Update the system with a preview")
+    sub.add_parser("update", help="Preview and apply system updates")
 
     args = parser.parse_args()
 
