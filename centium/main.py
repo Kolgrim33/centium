@@ -7,6 +7,7 @@ from rich.panel import Panel
 from rich.prompt import Confirm
 
 from centium import pacman_wrapper as pw
+from centium import update_report as ur
 
 console = Console()
 
@@ -104,7 +105,10 @@ def cmd_update() -> int:
         console.print("[green]System is up to date (or `checkupdates` is unavailable — pacman-contrib not installed).[/green]")
         if not Confirm.ask("Run `pacman -Syu` anyway?"):
             return 0
-        return pw.run_update()
+        before = ur.snapshot()
+        rc = pw.run_update()
+        _print_post_update_summary(before, [])
+        return rc
 
     table = Table(title=f"{len(updates)} update(s) available")
     table.add_column("Package")
@@ -114,12 +118,46 @@ def cmd_update() -> int:
         table.add_row(u["name"], u["old_version"], u["new_version"])
     console.print(table)
 
+    if ur.kernel_was_updated([u["name"] for u in updates]):
+        console.print("[yellow]Note:[/yellow] This update includes a new kernel — a reboot will be needed for it to take effect.\n")
+
     if not Confirm.ask("Proceed with update?"):
         console.print("[yellow]Cancelled.[/yellow]")
         return 0
 
+    before = ur.snapshot()
     console.print("[dim]Handing off to pacman...[/dim]\n")
-    return pw.run_update()
+    rc = pw.run_update()
+    _print_post_update_summary(before, [u["name"] for u in updates])
+    return rc
+
+
+def _print_post_update_summary(before: dict, updated_packages: list[str]) -> None:
+    after = ur.snapshot()
+    diff = ur.diff_snapshots(before, after)
+
+    console.print("\n[bold]Update summary[/bold]")
+    console.print(f"  Packages updated: {len(updated_packages)}")
+
+    if diff["new_pacnew_files"]:
+        console.print(f"\n[yellow]⚠ {len(diff['new_pacnew_files'])} new .pacnew/.pacsave file(s) appeared:[/yellow]")
+        for f in diff["new_pacnew_files"]:
+            console.print(f"    {f}")
+        console.print("  [dim]These are new upstream config defaults that weren't auto-merged with your edits. Review and merge manually, e.g. with: pacdiff[/dim]")
+
+    if diff["new_failed_services"]:
+        console.print(f"\n[red]✗ {len(diff['new_failed_services'])} service(s) failed after the update:[/red]")
+        for s in diff["new_failed_services"]:
+            console.print(f"    {s}")
+        console.print("  [dim]Check with: systemctl status <service>[/dim]")
+
+    if diff["resolved_failed_services"]:
+        console.print(f"\n[green]✓ {len(diff['resolved_failed_services'])} previously-failed service(s) now OK:[/green]")
+        for s in diff["resolved_failed_services"]:
+            console.print(f"    {s}")
+
+    if not diff["new_pacnew_files"] and not diff["new_failed_services"]:
+        console.print("\n[green]No new config conflicts or service failures detected.[/green]")
 
 
 def main() -> int:
