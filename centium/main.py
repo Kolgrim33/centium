@@ -22,24 +22,30 @@ def cmd_search(term: str) -> int:
         console.print(f"[yellow]No packages found matching '{term}'.[/yellow]")
         return 0
 
-    table = Table(title=f"Search results for '{term}'")
-    table.add_column("Package", style="bold")
-    table.add_column("Repo")
-    table.add_column("Version")
-    table.add_column("Installed")
-    table.add_column("Description")
+    # Exact/close name matches first, so the thing you're actually
+    # looking for doesn't get buried under language packs and unrelated
+    # partial matches.
+    def relevance(pkg):
+        name = pkg["name"].lower()
+        t = term.lower()
+        if name == t:
+            return 0
+        if name.startswith(t):
+            return 1
+        return 2
 
-    for pkg in results[:30]:
-        table.add_row(
-            pkg["name"],
-            pkg["repo"],
-            pkg["version"],
-            "[green]✓[/green]" if pkg["installed"] else "",
-            pkg["description"],
-        )
-    console.print(table)
-    if len(results) > 30:
-        console.print(f"[dim]...and {len(results) - 30} more. Narrow your search to see them.[/dim]")
+    results = sorted(results, key=relevance)
+
+    shown = results[:15]
+    console.print(f"[bold]Search results for '{term}'[/bold] ({len(results)} total, showing top {len(shown)})\n")
+
+    for pkg in shown:
+        installed = " [green]✓ installed[/green]" if pkg["installed"] else ""
+        console.print(f"[bold cyan]{pkg['name']}[/bold cyan] [dim]{pkg['repo']}/{pkg['version']}[/dim]{installed}")
+        console.print(f"  {pkg['description']}\n")
+
+    if len(results) > 15:
+        console.print(f"[dim]...and {len(results) - 15} more (mostly language packs/extras). Use a more specific search term to narrow this down.[/dim]")
     return 0
 
 
