@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: centium
+Version: 0.1.0
+Summary: A friendlier UX wrapper around pacman.
+Author: Selby Mashiki
+Requires-Python: >=3.10
+Requires-Dist: rich>=13.0

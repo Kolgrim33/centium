@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+centium/__init__.py
+centium/main.py
+centium/pacman_wrapper.py
+centium.egg-info/PKG-INFO
+centium.egg-info/SOURCES.txt
+centium.egg-info/dependency_links.txt
+centium.egg-info/entry_points.txt
+centium.egg-info/requires.txt
+centium.egg-info/top_level.txt
