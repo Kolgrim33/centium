@@ -1,12 +1,13 @@
 [project]
 name = "centium"
-version = "0.1.0"
-description = "A friendlier UX wrapper around pacman."
+version = "0.2.0"
+description = "A minimal, preview-first pacman UX wrapper with AUR support"
 authors = [{ name = "Selby Mashiki" }]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "rich>=13.0",
 ]
+keywords = ["pacman", "arch", "aur", "package-manager", "cli"]
 
 [project.scripts]
 centium = "centium.main:main"
