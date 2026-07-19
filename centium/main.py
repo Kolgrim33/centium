@@ -8,6 +8,7 @@ from rich.rule import Rule
 
 from centium import pacman_wrapper as pw
 from centium import update_report as ur
+from centium.aur import installer as aur_installer
 
 console = Console(highlight=False)
 
@@ -26,15 +27,15 @@ def _field(label: str, value: str, value_style: str = "") -> None:
 
 
 def _warn(message: str) -> None:
-    console.print(f"\n[yellow]⚠  {message}[/yellow]")
+    console.print(f"\n[yellow] {message}[/yellow]")
 
 
 def _error(message: str) -> None:
-    console.print(f"\n[red]✗  {message}[/red]")
+    console.print(f"\n[red]  {message}[/red]")
 
 
 def _ok(message: str) -> None:
-    console.print(f"\n[green]✓  {message}[/green]")
+    console.print(f"\n[green]  {message}[/green]")
 
 
 def _cancelled() -> None:
@@ -146,6 +147,132 @@ def cmd_remove(pkg: str) -> int:
     return pw.run_remove(pkg)
 
 
+def cmd_why(pkg: str) -> int:
+    try:
+        info = pw.package_why(pkg)
+    except pw.PacmanError as e:
+        _error(str(e))
+        return 1
+
+    if info is None:
+        _error(f"Package '{pkg}' not found.")
+        console.print(f"  Try: [bold]centium search {pkg}[/bold]\n")
+        return 1
+
+    _header(f"{info['name']} — why is this installed?")
+
+    console.print(f"  [dim]{'description':<18}[/dim]{info['description']}")
+    console.print(f"  [dim]{'version':<18}[/dim]{info['version']}")
+    console.print(f"  [dim]{'size':<18}[/dim]{info['size']}")
+    console.print()
+
+    # Install reason
+    if "explicitly" in info["install_reason"]:
+        reason_str = "[green]explicitly installed by you[/green]"
+    else:
+        reason_str = "[yellow]installed as a dependency[/yellow]"
+    console.print(f"  [dim]{'installed':<18}[/dim]{reason_str}")
+
+    # Install date
+    if info["days_ago"] is not None:
+        console.print(
+            f"  [dim]{'install date':<18}[/dim]{info['install_date']}  "
+            f"[dim]({info['days_ago']} days ago)[/dim]"
+        )
+    else:
+        console.print(f"  [dim]{'install date':<18}[/dim]{info['install_date']}")
+
+    console.print()
+
+    # Dependents
+    if info["dependents"]:
+        console.print(
+            f"  [dim]{'required by':<18}[/dim]"
+            f"[yellow]{len(info['dependents'])} package(s) depend on it:[/yellow]"
+        )
+        for d in info["dependents"][:5]:
+            console.print(f"  {'':18}[dim]• {d}[/dim]")
+        if len(info["dependents"]) > 5:
+            console.print(f"  {'':18}[dim]… and {len(info['dependents']) - 5} more[/dim]")
+        console.print()
+        console.print(
+            f"  [dim]{'verdict':<18}[/dim]"
+            f"[red]removing this will affect other packages[/red]"
+        )
+    else:
+        console.print(f"  [dim]{'required by':<18}[/dim]nothing depends on it")
+        console.print()
+        if "explicitly" in info["install_reason"]:
+            console.print(
+                f"  [dim]{'verdict':<18}[/dim]"
+                f"[green]safe to remove if you no longer need it[/green]"
+            )
+        else:
+            console.print(
+                f"  [dim]{'verdict':<18}[/dim]"
+                f"[yellow]orphan — no longer needed by anything[/yellow]"
+            )
+
+    console.print()
+
+    # Running status
+    if info["running"]:
+        console.print(f"  [dim]{'currently':<18}[/dim][green]running[/green]")
+    else:
+        console.print(f"  [dim]{'currently':<18}[/dim][dim]not running[/dim]")
+
+    console.print()
+    return 0
+
+
+
+
+def cmd_risk(pkg: str) -> int:
+    from centium.aur import risk as risk_mod
+    console.print(f"\n[dim]Assessing risk for '{pkg}'...[/dim]")
+
+    report = risk_mod.assess(pkg)
+
+    if report is None:
+        _error(f"Package '{pkg}' not found in AUR.")
+        return 1
+
+    pkg_info = report.pkg
+    _header(f"{pkg_info.get('Name', pkg)} — risk assessment")
+
+    severity_label = {"ok": "ok  ", "warn": "warn", "info": "    "}
+
+    for factor in report.factors:
+        label = severity_label.get(factor.severity, "    ")
+        console.print(f"  [dim]{label}[/dim]  {factor.message}")
+
+    console.print()
+    console.print(f"  [dim]score[/dim]  {report.score}/100  {report.level} RISK")
+    console.print()
+
+    if report.level == "LOW":
+        console.print("  Safe to install.")
+    elif report.level == "MEDIUM":
+        console.print("  Proceed with caution — review the factors above.")
+    elif report.level == "HIGH":
+        console.print("  High risk — carefully review before installing.")
+    else:
+        console.print("  Critical risk — strongly advise against installing.")
+
+    console.print()
+    return 0
+
+
+def cmd_aur_install(pkg: str) -> int:
+    return aur_installer.install(
+        pkg,
+        confirm_fn=lambda msg: Confirm.ask(msg, default=False),
+        print_fn=console.print,
+        warn_fn=lambda msg: console.print(f"\n[yellow]⚠  {msg}[/yellow]"),
+        error_fn=lambda msg: console.print(f"\n[red]✗  {msg}[/red]"),
+    )
+
+
 def cmd_update() -> int:
     console.print("\n[dim]Checking for available updates...[/dim]")
     updates = pw.update_preview()
@@ -238,7 +365,8 @@ def main() -> int:
             "  centium search firefox\n"
             "  centium install firefox\n"
             "  centium remove firefox\n"
-            "  centium update\n\n"
+            "  centium update\n"
+            "  centium why firefox\n\n"
             "Centium never installs or removes packages itself.\n"
             "It previews what will happen, then hands off to pacman."
         ),
@@ -254,6 +382,15 @@ def main() -> int:
     r = sub.add_parser("remove", help="Preview and remove a package")
     r.add_argument("package")
 
+    w = sub.add_parser("why", help="Explain why a package is installed")
+    w.add_argument("package")
+
+    rk = sub.add_parser("risk", help="Assess the risk of installing an AUR package")
+    rk.add_argument("package")
+
+    a = sub.add_parser("aur", help="Install a package from the AUR")
+    a.add_argument("package")
+
     sub.add_parser("update", help="Preview and apply system updates")
 
     args = parser.parse_args()
@@ -264,6 +401,12 @@ def main() -> int:
         return cmd_install(args.package)
     if args.command == "remove":
         return cmd_remove(args.package)
+    if args.command == "why":
+        return cmd_why(args.package)
+    if args.command == "risk":
+        return cmd_risk(args.package)
+    if args.command == "aur":
+        return cmd_aur_install(args.package)
     if args.command == "update":
         return cmd_update()
 
