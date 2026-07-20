@@ -7,6 +7,7 @@ A minimal, preview-first package manager UX for Arch Linux — with AUR support.
 ![AUR](https://img.shields.io/aur/version/centium)
 
 ## What it does
+<img width="1879" height="967" alt="centium" src="https://github.com/user-attachments/assets/4d7f6010-428c-440b-8b94-ec76b605a890" />
 
 centium never touches packages directly. Every command shows you exactly what is
 about to happen, then hands off to pacman or builds from the AUR.
@@ -55,6 +56,8 @@ last updated, maintainer status, out-of-date flag, package age, and PKGBUILD sec
 Returns a score from 0-100 with a verdict: LOW / MEDIUM / HIGH / CRITICAL RISK.
 
 ### aur
+<img width="1411" height="703" alt="centium1" src="https://github.com/user-attachments/assets/d17ef9f1-b26c-47d8-afc2-852a364d0b26" />
+
 ```bash
 centium aur brave-bin
 ```
@@ -62,6 +65,8 @@ Full AUR install pipeline — no paru or yay required. Clones the repo, scans th
 for suspicious patterns, offers review, runs makepkg, detects PGP issues.
 
 ### why
+<img width="1557" height="628" alt="centium4" src="https://github.com/user-attachments/assets/7986a470-ba52-4940-915a-db9468a90ac6" />
+
 ```bash
 centium why firefox
 ```
