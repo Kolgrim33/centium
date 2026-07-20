@@ -33,7 +33,7 @@ pip install --break-system-packages -e .
 centium suggest
 ```
 Scans your installed packages and surfaces complementary tools you might be missing.
-No other AUR helper or pacman wrapper does this — discovery based on what you already have.
+No other AUR helper or pacman wrapper does this , discovery based on what you already have.
 
 Example output:
 because you have hyprland:
@@ -116,8 +116,8 @@ no other tool has:
 
 ## Also check out
 
-- [hyprkit](https://github.com/Kolgrim33/hyprkit) — companion CLI for Hyprland (paru -S hyprkit-git)
-- [pkgstory](https://github.com/Kolgrim33/pkgstory) — your Arch journey told through pacman.log (paru -S pkgstory)
+- [hyprkit](https://github.com/Kolgrim33/hyprkit) :companion CLI for Hyprland (centium aur hyprkit-git)
+- [pkgstory](https://github.com/Kolgrim33/pkgstory) : your Arch journey told through pacman.log (centium aur pkgstory)
 
 ## Roadmap
 
