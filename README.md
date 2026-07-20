@@ -48,6 +48,8 @@ lazydocker                     terminal dashboard for docker
 dive                           explore docker image layers
 
 ### risk
+<img width="1411" height="703" alt="centium1" src="https://github.com/user-attachments/assets/d17ef9f1-b26c-47d8-afc2-852a364d0b26" />
+
 ```bash
 centium risk brave-bin
 ```
@@ -56,7 +58,6 @@ last updated, maintainer status, out-of-date flag, package age, and PKGBUILD sec
 Returns a score from 0-100 with a verdict: LOW / MEDIUM / HIGH / CRITICAL RISK.
 
 ### aur
-<img width="1411" height="703" alt="centium1" src="https://github.com/user-attachments/assets/d17ef9f1-b26c-47d8-afc2-852a364d0b26" />
 
 ```bash
 centium aur brave-bin
