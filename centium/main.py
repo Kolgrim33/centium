@@ -227,6 +227,32 @@ def cmd_why(pkg: str) -> int:
 
 
 
+
+def cmd_suggest() -> int:
+    from centium import suggest as suggest_mod
+
+    console.print("\n[dim]Scanning installed packages...[/dim]")
+    installed = suggest_mod.get_installed()
+    suggestions = suggest_mod.get_suggestions(installed)
+
+    if not suggestions:
+        _ok("No suggestions — your setup looks complete.")
+        return 0
+
+    _header(f"suggestions based on your installed packages")
+
+    for group in suggestions:
+        triggers = ", ".join(group["triggered_by"])
+        console.print(f"\n  [dim]because you have {triggers}:[/dim]")
+        for pkg, desc in group["missing"]:
+            console.print(f"    {pkg:<30} [dim]{desc}[/dim]")
+
+    console.print()
+    console.print(f"  [dim]Install any of these with: centium aur <package> or centium install <package>[/dim]")
+    console.print()
+    return 0
+
+
 def cmd_risk(pkg: str) -> int:
     from centium.aur import risk as risk_mod
     console.print(f"\n[dim]Assessing risk for '{pkg}'...[/dim]")
@@ -385,6 +411,8 @@ def main() -> int:
     w = sub.add_parser("why", help="Explain why a package is installed")
     w.add_argument("package")
 
+    sub.add_parser("suggest", help="Suggest packages that complement your setup")
+
     rk = sub.add_parser("risk", help="Assess the risk of installing an AUR package")
     rk.add_argument("package")
 
@@ -403,6 +431,8 @@ def main() -> int:
         return cmd_remove(args.package)
     if args.command == "why":
         return cmd_why(args.package)
+    if args.command == "suggest":
+        return cmd_suggest()
     if args.command == "risk":
         return cmd_risk(args.package)
     if args.command == "aur":
