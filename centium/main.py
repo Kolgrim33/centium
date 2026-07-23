@@ -299,6 +299,70 @@ def cmd_aur_install(pkg: str) -> int:
     )
 
 
+
+def cmd_aur_update() -> int:
+    from centium.aur import updater, installer
+
+    console.print("\n[dim]Checking AUR packages for updates...[/dim]")
+    packages = updater.get_aur_packages()
+    console.print(f"[dim]Found {len(packages)} AUR packages installed.[/dim]")
+
+    updates = updater.check_updates(packages)
+
+    if not updates:
+        _ok("All AUR packages are up to date.")
+        return 0
+
+    _header(f"{len(updates)} AUR update(s) available")
+
+    for u in updates:
+        console.print(
+            f"  [bold]{u['name']:<35}[/bold]"
+            f"  [red]{u['installed']}[/red]"
+            f"  →  [green]{u['available']}[/green]"
+        )
+
+    console.print()
+
+    if not Confirm.ask("Update all?", default=False):
+        console.print()
+        console.print("  Select packages to update:")
+        for i, u in enumerate(updates, 1):
+            console.print(f"  {i}. {u['name']}")
+        choices = Prompt.ask("Enter numbers separated by spaces (or Enter to cancel)")
+        if not choices.strip():
+            _cancelled()
+            return 0
+        selected = []
+        for c in choices.split():
+            try:
+                selected.append(updates[int(c) - 1])
+            except (ValueError, IndexError):
+                pass
+        if not selected:
+            _cancelled()
+            return 0
+        updates = selected
+
+    visited: set[str] = set()
+    for u in updates:
+        console.print(f"\n[dim]Updating {u['name']}...[/dim]")
+        rc = installer.install(
+            u["name"],
+            confirm_fn=lambda msg: Confirm.ask(msg, default=False),
+            print_fn=console.print,
+            warn_fn=lambda msg: console.print(f"\n[yellow]⚠  {msg}[/yellow]"),
+            error_fn=lambda msg: console.print(f"\n[red]✗  {msg}[/red]"),
+            _visited=visited,
+        )
+        if rc != 0:
+            _error(f"Failed to update {u['name']}")
+            return rc
+
+    _ok("All selected AUR packages updated.")
+    return 0
+
+
 def cmd_update() -> int:
     console.print("\n[dim]Checking for available updates...[/dim]")
     updates = pw.update_preview()
@@ -419,6 +483,7 @@ def main() -> int:
     a = sub.add_parser("aur", help="Install a package from the AUR")
     a.add_argument("package")
 
+    sub.add_parser("aur-update", help="Check and update AUR packages")
     sub.add_parser("update", help="Preview and apply system updates")
 
     args = parser.parse_args()
@@ -437,6 +502,8 @@ def main() -> int:
         return cmd_risk(args.package)
     if args.command == "aur":
         return cmd_aur_install(args.package)
+    if args.command == "aur-update":
+        return cmd_aur_update()
     if args.command == "update":
         return cmd_update()
 
