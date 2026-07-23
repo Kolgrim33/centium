@@ -7,7 +7,6 @@ A minimal, preview-first package manager UX for Arch Linux — with AUR support.
 ![AUR](https://img.shields.io/aur/version/centium)
 
 ## What it does
-<img width="1879" height="967" alt="centium" src="https://github.com/user-attachments/assets/4d7f6010-428c-440b-8b94-ec76b605a890" />
 
 centium never touches packages directly. Every command shows you exactly what is
 about to happen, then hands off to pacman or builds from the AUR.
@@ -33,13 +32,10 @@ pip install --break-system-packages -e .
 centium suggest
 ```
 Scans your installed packages and surfaces complementary tools you might be missing.
-No other AUR helper or pacman wrapper does this , discovery based on what you already have.
-
-Example output:
+No other AUR helper or pacman wrapper does proactive discovery based on what you already have.
 because you have hyprland:
 hypridle                       idle daemon — auto-lock and screen-off
 hyprlock                       screen locker for Hyprland
-hyprpaper                      wallpaper manager for Hyprland
 because you have neovim:
 ripgrep                        fast grep — used by telescope.nvim
 lazygit                        terminal git UI — integrates with neovim
@@ -48,37 +44,47 @@ lazydocker                     terminal dashboard for docker
 dive                           explore docker image layers
 
 ### risk
-<img width="1411" height="703" alt="centium1" src="https://github.com/user-attachments/assets/d17ef9f1-b26c-47d8-afc2-852a364d0b26" />
-
 ```bash
 centium risk brave-bin
 ```
 Scores an AUR package trustworthiness before you install it. Checks votes, popularity,
-last updated, maintainer status, out-of-date flag, package age, and PKGBUILD security scan.
-Returns a score from 0-100 with a verdict: LOW / MEDIUM / HIGH / CRITICAL RISK.
+maintainer status, out-of-date flag, package age, and scans the PKGBUILD for suspicious
+patterns. Returns a score from 0-100 with a verdict: LOW / MEDIUM / HIGH / CRITICAL RISK.
+
+Especially relevant given the 2026 AUR compromise — know what you are installing before
+you run it.
 
 ### aur
-
 ```bash
 centium aur brave-bin
 ```
-Full AUR install pipeline — no paru or yay required. Clones the repo, scans the PKGBUILD
-for suspicious patterns, offers review, runs makepkg, detects PGP issues.
+Full AUR install pipeline with recursive dependency resolution — no paru or yay required.
+
+- Fetches package info from the AUR RPC
+- Automatically detects and installs AUR dependencies before the main package
+- Clones the AUR repo to ~/.cache/centium/aur/
+- Scans the PKGBUILD for suspicious patterns
+- Offers to show the full PKGBUILD for review
+- Runs makepkg -si with your confirmation
+- Detects PGP key issues and tells you exactly how to fix them
 
 ### why
-<img width="1557" height="628" alt="centium4" src="https://github.com/user-attachments/assets/7986a470-ba52-4940-915a-db9468a90ac6" />
-
 ```bash
 centium why firefox
 ```
-Explains why a package is installed in plain English — when it was installed, what depends
-on it, whether it is an orphan, whether it is currently running, and a verdict on safety to remove.
+Explains why a package is installed in plain English:
+- Whether you installed it explicitly or it came in as a dependency
+- When it was installed and how many days ago
+- What depends on it or if it is an orphan
+- Whether it is currently running
+- A verdict: safe to remove or will break other packages
 
 ### install
 ```bash
 centium install firefox
 ```
-Shows description, version, download size, and dependencies before confirming. Hands off to pacman.
+Shows description, version, download size, and dependencies before confirming.
+Hands off to pacman.
 
 ### remove
 ```bash
@@ -90,23 +96,26 @@ Warns which installed packages depend on the target before removing.
 ```bash
 centium update
 ```
-Shows exactly what would change before running pacman -Syu. Reports new .pacnew files
-and newly failing services after the update completes.
+Shows exactly what would change before running pacman -Syu. After updating, reports
+new .pacnew files and any newly failing services.
 
 ### search
 ```bash
 centium search firefox
 ```
-Clean sorted results instead of pacman wall of text.
+Clean sorted results instead of pacman wall of text. Shows repo, version, and
+whether already installed.
 
-## Why centium
+## What makes centium different
 
-pacman is powerful but unforgiving. centium adds a preview layer and three features
-no other tool has:
-
-- suggest — proactive discovery based on your installed packages
-- risk — trust score for AUR packages before you run their PKGBUILD
-- why — plain English explanation of why a package exists on your system
+| Feature | centium | paru | yay |
+|---|---|---|---|
+| Preview before every action | yes | partial | partial |
+| AUR dep resolution | recursive | yes | yes |
+| Risk scoring before install | yes | no | no |
+| Proactive package suggestions | yes | no | no |
+| Plain English why explanation | yes | no | no |
+| Post-update service report | yes | no | no |
 
 ## Requirements
 
@@ -117,12 +126,11 @@ no other tool has:
 
 ## Also check out
 
-- [hyprkit](https://github.com/Kolgrim33/hyprkit) :companion CLI for Hyprland (centium aur hyprkit-git)
-- [pkgstory](https://github.com/Kolgrim33/pkgstory) : your Arch journey told through pacman.log (centium aur pkgstory)
+- [hyprkit](https://github.com/Kolgrim33/hyprkit) — companion CLI for Hyprland (paru -S hyprkit-git)
+- [pkgstory](https://github.com/Kolgrim33/pkgstory) — your Arch journey told through pacman.log (paru -S pkgstory)
 
 ## Roadmap
 
-- Dependency resolution for AUR packages that depend on other AUR packages
 - centium orphans — find and explain unused packages
 - centium health — full system health report
-- Community contributions to the suggest pairing dataset
+- Expand suggest pairing dataset with community contributions
