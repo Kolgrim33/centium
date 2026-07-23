@@ -1,7 +1,7 @@
 # Maintainer: Selby Mashiki mashikiselby@gmail.com
 pkgname=centium
-pkgver=0.2.0
-pkgrel=2
+pkgver=0.4.0
+pkgrel=1
 pkgdesc="A minimal, preview-first pacman UX wrapper with AUR support"
 arch=("any")
 url="https://github.com/Kolgrim33/centium"
