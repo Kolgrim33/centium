@@ -228,6 +228,82 @@ def cmd_why(pkg: str) -> int:
 
 
 
+
+def cmd_info(pkg: str) -> int:
+    try:
+        info = pw.package_info_deep(pkg)
+    except pw.PacmanError as e:
+        _error(str(e))
+        return 1
+
+    if info is None:
+        _error(f"Package '{pkg}' not found or not installed.")
+        console.print(f"  Try: [bold]centium search {pkg}[/bold]\n")
+        return 1
+
+    _header(f"{info['name']}  {info['version']}")
+
+    console.print(f"  [dim]{'description':<18}[/dim]{info['description']}")
+    console.print(f"  [dim]{'url':<18}[/dim]{info['url']}")
+    console.print(f"  [dim]{'license':<18}[/dim]{info['licenses']}")
+    console.print(f"  [dim]{'size':<18}[/dim]{info['install_size']}")
+    console.print(f"  [dim]{'installed':<18}[/dim]{info['install_date']}")
+    console.print(f"  [dim]{'reason':<18}[/dim]{info['install_reason']}")
+    console.print(f"  [dim]{'packager':<18}[/dim]{info['packager']}")
+    console.print(f"  [dim]{'built':<18}[/dim]{info['build_date']}")
+    console.print()
+
+    # Files summary
+    console.print(f"  [dim]{'files':<18}[/dim]{info['total_files']} total")
+    if info["binaries"]:
+        console.print(f"  [dim]{'binaries':<18}[/dim]", end="")
+        console.print(", ".join(b.split("/")[-1] for b in info["binaries"]))
+    if info["configs"]:
+        console.print(f"  [dim]{'config files':<18}[/dim]{len(info['configs'])} in /etc/")
+        for c in info["configs"][:5]:
+            console.print(f"  {'':<18}[dim]{c}[/dim]")
+        if len(info["configs"]) > 5:
+            console.print(f"  {'':<18}[dim]… and {len(info['configs']) - 5} more[/dim]")
+    if info["man_pages"]:
+        console.print(f"  [dim]{'man pages':<18}[/dim]{len(info['man_pages'])} available")
+    console.print()
+
+    # Dependencies
+    if info["depends_on"] and info["depends_on"] != "None":
+        deps = info["depends_on"].split()
+        console.print(f"  [dim]{'depends on':<18}[/dim]{len(deps)} packages")
+
+    if info["required_by"] and info["required_by"] != "None":
+        console.print(f"  [dim]{'required by':<18}[/dim]{info['required_by']}")
+    else:
+        console.print(f"  [dim]{'required by':<18}[/dim]nothing — safe to remove if unused")
+
+    if info["optional_deps"] and info["optional_deps"] != "None":
+        console.print()
+        console.print(f"  [dim]optional deps[/dim]")
+        for dep in info["optional_deps"].split("  "):
+            dep = dep.strip()
+            if dep:
+                installed = "[dim](installed)[/dim]" if "[installed]" in dep else ""
+                clean = dep.replace("[installed]", "").strip()
+                console.print(f"  [dim]•[/dim] {clean} {installed}")
+
+    console.print()
+
+    # Backup files
+    if info["backup_files"] and info["backup_files"] != "None":
+        console.print(f"  [dim]{'backup files':<18}[/dim]{info['backup_files']}")
+
+    # Status
+    if info["running"]:
+        console.print(f"  [dim]{'status':<18}[/dim]currently running")
+    else:
+        console.print(f"  [dim]{'status':<18}[/dim]not running")
+
+    console.print()
+    return 0
+
+
 def cmd_suggest() -> int:
     from centium import suggest as suggest_mod
 
@@ -475,6 +551,9 @@ def main() -> int:
     w = sub.add_parser("why", help="Explain why a package is installed")
     w.add_argument("package")
 
+    inf = sub.add_parser("info", help="Show deep info about an installed package")
+    inf.add_argument("package")
+
     sub.add_parser("suggest", help="Suggest packages that complement your setup")
 
     rk = sub.add_parser("risk", help="Assess the risk of installing an AUR package")
@@ -496,6 +575,8 @@ def main() -> int:
         return cmd_remove(args.package)
     if args.command == "why":
         return cmd_why(args.package)
+    if args.command == "info":
+        return cmd_info(args.package)
     if args.command == "suggest":
         return cmd_suggest()
     if args.command == "risk":
